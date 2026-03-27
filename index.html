@@ -135,13 +135,12 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
 .leaflet-container{background:#c9dff0!important}
 
 /* Bottom bar */
-.route-bar{position:absolute;bottom:0;left:0;right:0;background:rgba(13,17,23,.93);border-top:1px solid var(--border2);padding:7px 18px;display:none;gap:24px;align-items:center;z-index:600;backdrop-filter:blur(6px)}
+.route-bar{position:absolute;bottom:0;left:0;right:0;background:rgba(13,17,23,.96);border-top:2px solid var(--accent);padding:8px 20px;display:none;gap:28px;align-items:center;z-index:600;backdrop-filter:blur(6px)}
 .route-bar.show{display:flex}
-.rb-item{display:flex;flex-direction:column;gap:1px}
-.rb-lbl{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase}
-.rb-val{font-family:var(--head);font-weight:700;font-size:15px;color:var(--text-bright)}
+.rb-item{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rb-lbl{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;white-space:nowrap}
+.rb-val{font-family:var(--head);font-weight:800;font-size:16px;color:var(--text-bright);white-space:nowrap}
 .rb-val.ac{color:var(--accent-light)}.rb-val.go{color:var(--gold)}.rb-val.gr{color:var(--green)}.rb-val.ec{color:var(--eca)}
-
 /* Map overlay */
 .map-ov{position:absolute;top:14px;right:14px;background:rgba(13,17,23,.9);border:1px solid var(--border2);padding:9px 12px;z-index:600;backdrop-filter:blur(4px);display:none;border-radius:3px;min-width:180px}
 .ov-row{font-family:var(--mono);font-size:9px;color:var(--text-dim);display:flex;justify-content:space-between;gap:10px;margin-bottom:2px}
@@ -450,7 +449,10 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
     <div class="eca-row"><div class="eca-swatch" style="background:#117a65"></div>Hawaii ECA</div>
   </div>
   <div class="route-bar" id="rBar">
-    <div class="rb-item"><div class="rb-lbl">TOTAL DISTANCE</div><div class="rb-val ac" id="bNm">—</div></div>
+    <div class="rb-item" style="background:rgba(45,141,224,.12);padding:4px 12px;border-radius:3px;border:1px solid var(--accent);min-width:120px">
+      <div class="rb-lbl" style="color:var(--accent-light)">TOTAL DISTANCE</div>
+      <div class="rb-val ac" id="bNm" style="font-size:18px">—</div>
+    </div>
     <div class="rb-item"><div class="rb-lbl">FROM</div><div class="rb-val" id="bFrom" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">TO</div><div class="rb-val" id="bTo" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">ECA MILES</div><div class="rb-val ec" id="bEca">—</div></div>
@@ -1001,49 +1003,57 @@ async function calcRoute(){
     oName=`${oLa.toFixed(3)}°N ${oLo.toFixed(3)}°E`;dName=`${dLa.toFixed(3)}°N ${dLo.toFixed(3)}°E`;
   }
 
-  // Build avoid list from toggles
+  // Build avoid list from canal toggles
   const avoid=[];
-  if(!suezOK) avoid.push('suez');
+  if(!suezOK)  avoid.push('suez');
   if(!panamaOK) avoid.push('panama');
-  if(!kielOK) avoid.push('kiel');
+  if(!kielOK)  avoid.push('kiel');
 
-  // If "via" points are selected, we route via them sequentially
-  const viaList=[...activeVia].map(k=>VIA_COORDS[k]).filter(Boolean);
+  // Force Via logic:
+  // The ONLY reliable way to force a route through a passage without distortion
+  // is to remove that passage from the "avoid" list (already done above for canals),
+  // and for Cape GH / Cape Horn, route via a single well-chosen mid-ocean waypoint.
+  // We do NOT chain multiple routing legs for straits/canals — this causes distance
+  // inflation and V-shapes because each leg finds its own local optimum.
+
+  const viaKeys = [...activeVia];
+
+  // Cape of Good Hope: force by routing via a single S. Atlantic waypoint (-35°, 17°E)
+  // Cape Horn: force by routing via a single S. Pacific waypoint (-57°, -68°E)
+  // All other Force Via buttons: ensure the passage is NOT in the avoid list
+  // (the routing engine uses it naturally when it's the optimal path)
+
+  const CAPE_GH_WP   = {la:-35.0, lo:17.5,  name:'Cape of Good Hope approach'};
+  const CAPE_HORN_WP = {la:-57.0, lo:-68.0, name:'Cape Horn approach'};
+
+  let useCapGH   = viaKeys.includes('cape_good_hope');
+  let useCapHorn = viaKeys.includes('cape_horn');
+
+  // For passage-based via buttons, remove from avoid list if user forced them
+  const passageViaMap = {
+    'suez':'suez','panama':'panama','malacca':'malacca',
+    'gibraltar':'gibraltar','babalmandab':'babalmandab',
+    'sunda':'sunda','lombok':'lombok','hormuz':'hormuz',
+    'dover':'dover','bering':'bering',
+  };
+  for(const key of viaKeys){
+    const p=passageViaMap[key];
+    if(p){ const i=avoid.indexOf(p); if(i>-1) avoid.splice(i,1); }
+  }
 
   hideErr();
   const btn=document.getElementById('calcBtn');
   btn.classList.add('loading');btn.textContent='⬡ ROUTING…';
 
   try {
-    // For "force via" points: instead of adding intermediate legs (which distorts distance),
-    // we pass them as waypoints only if they genuinely require a detour.
-    // For canals/straits that searoute already uses by default, "force via" just
-    // ensures the avoid list does NOT exclude them — which is already the default.
-    // Only add intermediate waypoint legs for major geographic deviations
-    // (Cape of Good Hope, Cape Horn) that change the fundamental route.
-    const MAJOR_DETOURS = new Set(['cape_good_hope','cape_horn']);
-    const viaKeys = [...activeVia];
-
+    // Build leg points — only add intermediate waypoints for Cape GH / Cape Horn
     const legPoints = [{la:oLa,lo:oLo,name:oName}];
 
-    for(const key of viaKeys){
-      if(!MAJOR_DETOURS.has(key)) continue; // skip canals/straits — MARNET handles them
-      const v = VIA_COORDS[key];
-      if(!v) continue;
-      // Use a single open-water anchor only (no departure anchor — avoids U-turns)
-      const anchors = VIA_SEA_ANCHORS[key];
-      if(anchors && anchors.length >= 1){
-        // Pick the anchor closer to origin
-        const distA0 = Math.abs(anchors[0].la - oLa) + Math.abs(anchors[0].lo - oLo);
-        const distA1 = anchors.length>1 ? Math.abs(anchors[1].la - oLa) + Math.abs(anchors[1].lo - oLo) : Infinity;
-        const entry = distA0 < distA1 ? anchors[0] : anchors[1];
-        const exit  = distA0 < distA1 ? (anchors[1]||anchors[0]) : anchors[0];
-        legPoints.push({la:entry.la,lo:entry.lo,name:v.label+' approach'});
-        legPoints.push({la:v.la,   lo:v.lo,    name:v.label});
-        legPoints.push({la:exit.la, lo:exit.lo, name:v.label+' departure'});
-      } else {
-        legPoints.push({la:v.la,lo:v.lo,name:v.label});
-      }
+    if(useCapGH){
+      legPoints.push(CAPE_GH_WP);
+    }
+    if(useCapHorn){
+      legPoints.push(CAPE_HORN_WP);
     }
 
     legPoints.push({la:dLa,lo:dLo,name:dName});
