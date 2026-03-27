@@ -2,6 +2,8 @@
 """
 SeaRoute Maritime Routing Server
 Deploy to Render.com (free, no credit card) for public access.
+Install: pip install flask searoute gunicorn
+Run:     python server.py
 """
 import math, os
 from pathlib import Path
@@ -62,6 +64,51 @@ def name_from_passages(passages):
     if 'northwest' in p: return "VIA NORTHWEST PASSAGE"
     return "VIA "+" & ".join([x.upper() for x in p])
 
+# ── KNOWN BYPASS WAYPOINTS ────────────────────────────────────────────────────
+# Single open-water coordinates inserted between specific segments to nudge
+# the display line away from known land-crossing artifacts in the MARNET graph.
+# Format: each entry defines a bounding box that triggers insertion of ONE
+# bypass point (lon, lat) when a segment's midpoint falls inside that box.
+# Only the display polyline is altered — distance comes from searoute's graph
+# and is unchanged.
+BYPASS_WAYPOINTS = [
+    # Socotra Archipelago / Gulf of Aden east end
+    # MARNET sometimes draws a straight line that clips over Socotra (12.5°N, 54°E)
+    # Bypass: single point at 11.5°N, 54.0°E — clear open water south of Socotra
+    {
+        'box': [50.0, 11.5, 58.0, 14.0],   # lon_min, lat_min, lon_max, lat_max
+        'bypass': [54.0, 11.5],             # [lon, lat] — open water S of Socotra
+    },
+    # Yemen coast near Aden — line sometimes clips the coastline peninsula
+    # Bypass: nudge south into open Gulf of Aden water
+    {
+        'box': [44.0, 11.8, 50.5, 14.2],
+        'bypass': [47.0, 12.0],
+    },
+]
+
+def insert_bypass_waypoints(coords):
+    """
+    Scan coordinate pairs. If a segment's midpoint falls inside a known hazard box,
+    insert a single safe bypass waypoint between those two coordinates.
+    Simple, predictable, no spaghetti.
+    """
+    if len(coords) < 2:
+        return coords
+    result = [coords[0]]
+    for i in range(len(coords) - 1):
+        lon1, lat1 = coords[i]
+        lon2, lat2 = coords[i+1]
+        mid_lon = (lon1 + lon2) / 2
+        mid_lat = (lat1 + lat2) / 2
+        for bp in BYPASS_WAYPOINTS:
+            b = bp['box']
+            if b[0] <= mid_lon <= b[2] and b[1] <= mid_lat <= b[3]:
+                result.append(bp['bypass'])
+                break  # only one bypass per segment
+        result.append([lon2, lat2])
+    return result
+
 def route_scgraph(olon,olat,dlon,dlat,restrictions):
     try:
         result=GRAPH.get_shortest_path(
@@ -73,6 +120,7 @@ def route_scgraph(olon,olat,dlon,dlat,restrictions):
         if not result or 'coordinate_path' not in result:
             return {"error":"No route found"}
         coords=[[c['longitude'],c['latitude']] for c in result['coordinate_path']]
+        coords=insert_bypass_waypoints(coords)
         total_km=result.get('length',0)
         passages=detect_passages(coords)
         return {"coordinates":coords,"distance_km":round(total_km,1),
@@ -85,108 +133,30 @@ def route_scgraph(olon,olat,dlon,dlat,restrictions):
 def route_searoute(olon,olat,dlon,dlat,restrictions):
     import searoute as sr
     sr_r=[PASSAGE_MAP[r] for r in restrictions if r in PASSAGE_MAP]
-
     try:
         route=sr.searoute([olon,olat],[dlon,dlat],units="km",
                           append_orig_dest=True,restrictions=sr_r,return_passages=True)
     except Exception as e:
         return {"error":str(e)}
     if not route: return {"error":"No route found"}
-
     geom=route.get("geometry",{}); coords=geom.get("coordinates",[])
     props=route.get("properties",{}); total_km=props.get("length",0)
     passages=props.get("passages",[])
     if isinstance(passages,str): passages=[passages] if passages else []
-
-    # ── POST-PROCESS: fix known land-crossing segments ──────────────────────
-    # Strategy: scan consecutive coordinate pairs for segments that pass through
-    # known land-crossing zones, and replace them with safe open-water waypoints.
-    # This does NOT add routing legs — it only adjusts display coordinates.
-    # The distance from searoute is kept as-is (it's calculated on the graph,
-    # not on the display polyline, so it's already correct).
-    coords = fix_land_crossings(coords)
-
+    # Apply single bypass waypoints for display
+    coords = insert_bypass_waypoints(coords)
     return {"coordinates":coords,"distance_km":round(total_km,1),
             "distance_nm":round(total_km/1.852,1),
             "route_name":name_from_passages(passages),
             "passages":passages,"node_count":len(coords),"warning":None}
-
-
-def segment_crosses_box(lon1,lat1,lon2,lat2, box_lon1,box_lat1,box_lon2,box_lat2):
-    """Check if a line segment passes through a bounding box."""
-    # Quick check: does the segment's bounding box overlap the hazard box?
-    seg_min_lon=min(lon1,lon2); seg_max_lon=max(lon1,lon2)
-    seg_min_lat=min(lat1,lat2); seg_max_lat=max(lat1,lat2)
-    if seg_max_lon<box_lon1 or seg_min_lon>box_lon2: return False
-    if seg_max_lat<box_lat1 or seg_min_lat>box_lat2: return False
-    return True
-
-
-def fix_land_crossings(coords):
-    """
-    Post-process coordinate list to fix known MARNET land-crossing artifacts.
-    Hazard zones and their safe replacement waypoint sequences.
-    Each hazard has: bounding box + list of open-water waypoints to insert
-    when a segment crosses that box.
-    """
-    # Known MARNET hazard zones: [lon_min, lat_min, lon_max, lat_max, [[safe waypoints]]]
-    HAZARDS = [
-        # Gulf of Aden / Socotra — route clips over island or Yemen coast
-        # Safe corridor: stay between 11.5°N–13°N threading south of Yemen peninsula
-        {
-            'box': [43.0, 11.0, 57.0, 14.5],
-            'safe': [
-                [43.5, 12.3],   # just past Bab-el-Mandeb, open water
-                [45.5, 12.0],   # Gulf of Aden centre
-                [48.0, 11.8],   # Gulf of Aden E, south of Yemen tip
-                [51.0, 11.5],   # clear of Socotra (south)
-                [54.0, 12.0],   # E. Gulf of Aden, open water
-            ]
-        },
-        # Red Sea northern exit — sometimes clips Sinai/Egypt
-        {
-            'box': [31.5, 27.5, 34.5, 30.5],
-            'safe': [
-                [32.5, 29.5],   # centre Red Sea N
-            ]
-        },
-    ]
-
-    if len(coords) < 2:
-        return coords
-
-    new_coords = [coords[0]]
-
-    for i in range(len(coords)-1):
-        lon1,lat1 = coords[i]
-        lon2,lat2 = coords[i+1]
-
-        inserted = False
-        for hz in HAZARDS:
-            b = hz['box']
-            if segment_crosses_box(lon1,lat1,lon2,lat2, b[0],b[1],b[2],b[3]):
-                # Check if either endpoint is already inside the safe zone
-                # (avoid inserting if segment is just traversing normally)
-                mid_lon = (lon1+lon2)/2
-                mid_lat = (lat1+lat2)/2
-                # Only insert waypoints if midpoint is IN the hazard box
-                if b[0] <= mid_lon <= b[2] and b[1] <= mid_lat <= b[3]:
-                    for wp in hz['safe']:
-                        new_coords.append(wp)
-                    inserted = True
-                    break
-
-        new_coords.append([lon2, lat2])
-
-    return new_coords
-
 
 @app.route("/api/status")
 def status():
     r=jsonify({"status":"ready" if ENGINE else "unavailable",
                "engine":ENGINE or "none",
                "nodes":len(GRAPH.graph) if ENGINE=='scgraph' else 0,
-               "backend":"scgraph (MARNET)" if ENGINE=='scgraph' else ("searoute-py" if ENGINE=='searoute' else "not loaded")})
+               "backend":"scgraph (MARNET)" if ENGINE=='scgraph' else
+                         ("searoute-py" if ENGINE=='searoute' else "not loaded")})
     r.headers["Access-Control-Allow-Origin"]="*"; return r
 
 @app.route("/api/route")
