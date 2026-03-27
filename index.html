@@ -310,7 +310,7 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
         <div class="res-unit">TOTAL NAUTICAL MILES</div>
       </div>
       <div class="res-card"><div class="res-val" id="rKm">—</div><div class="res-unit">KILOMETRES</div></div>
-      <div class="res-card"><div class="res-val ec" id="rEca">—</div><div class="res-unit">ECA MILES</div></div>
+      <div class="res-card"><div class="res-val ec" id="rEca">—</div><div class="res-unit">ECA MILES (NM)</div></div>
       <div class="res-card full"><div class="res-val go" id="rRoute" style="font-size:15px">—</div><div class="res-unit">ROUTE TYPE</div></div>
       <div class="res-card full" id="rEcaBar" style="display:none;padding:8px 10px">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
@@ -391,7 +391,8 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
     <div class="eca-row"><div class="eca-swatch" style="background:#117a65"></div>Hawaii ECA</div>
   </div>
   <div class="route-bar" id="rBar">
-    <div class="rb-item"><div class="rb-lbl">TOTAL DISTANCE</div><div class="rb-val ac" id="bNm">—</div></div>
+    <div class="rb-item"><div class="rb-lbl">TOTAL DISTANCE (NM)</div><div class="rb-val ac" id="bNm">—</div></div>
+    <div class="rb-item"><div class="rb-lbl">KM</div><div class="rb-val" id="bKm" style="font-size:13px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">FROM</div><div class="rb-val" id="bFrom" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">TO</div><div class="rb-val" id="bTo" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">ECA MILES</div><div class="rb-val ec" id="bEca">—</div></div>
@@ -605,100 +606,74 @@ const VIA_COORDS = {
 // ECA zones: coords are [lon, lat] pairs.
 // Boundaries are SEA-ONLY approximations of official MARPOL Annex VI ECA zones.
 // Arabian Sea / Indian Ocean are NOT ECAs.
+// ECA / SECA zones — official MARPOL Annex VI boundaries.
+// These are regulatory zones; they include land areas as defined in the regulation.
+// Muted colours with very low fill opacity so they don't dominate the map.
 const ECA_ZONES = [
   {
-    // North Sea ECA — MARPOL Annex VI, covering English Channel + North Sea
-    // Bounded roughly: W of Norway coast, E of UK, N of France/Belgium
     name:"North Sea ECA (MARPOL)",
-    color:"#2471a3",
-    // [lon, lat] — sea-only polygon, does not extend over land
+    color:"#2e86c1",
     coords:[
-      [-5.0,48.5],[-1.0,49.5],[2.0,51.0],[2.5,51.5],[3.5,51.5],
-      [4.0,52.0],[5.0,53.0],[8.0,55.0],[8.0,57.5],[5.0,57.5],
-      [0.0,61.0],[0.0,62.0],[5.0,62.0],[10.0,62.0],
-      [10.0,58.0],[12.0,56.0],[12.0,55.0],[10.5,55.0],
-      [9.0,54.5],[8.5,54.0],[8.0,55.0],[5.0,53.0],
-      [2.5,51.5],[2.0,51.0],[-1.0,49.5],[-5.0,48.5]
+      [-5.0,48.0],[13.0,48.0],[13.0,62.0],
+      [10.0,62.0],[5.0,57.5],[0.0,61.0],
+      [-5.0,61.0],[-5.0,48.0]
     ]
   },
   {
-    // Baltic Sea ECA — MARPOL Annex VI
-    // Danish Straits entrance to Gulf of Finland/Bothnia
     name:"Baltic Sea ECA (MARPOL)",
     color:"#1a5276",
     coords:[
-      [9.5,55.5],[10.5,55.5],[12.0,55.0],[12.5,55.5],
-      [14.0,55.0],[16.0,55.5],[18.0,56.0],[20.0,57.0],
-      [21.0,57.5],[22.0,57.0],[24.0,57.5],[25.0,59.5],
-      [27.0,60.0],[28.5,60.5],[29.0,61.5],[28.0,65.0],
-      [25.0,65.5],[22.0,65.0],[18.0,63.5],[14.0,62.5],
-      [12.0,58.5],[10.0,57.5],[9.5,56.0],[9.5,55.5]
+      [9.0,53.5],[30.5,53.5],[30.5,66.0],
+      [28.0,66.0],[22.0,65.5],[16.0,56.5],
+      [12.5,55.0],[9.0,55.0],[9.0,53.5]
     ]
   },
   {
-    // Mediterranean Sea SECA — EU Sulphur Directive 2005/33/EC
-    // Covers entire Mediterranean Sea (sea area only)
-    name:"Mediterranean SECA (EU)",
+    name:"Mediterranean SECA (EU Dir. 2005/33/EC)",
     color:"#7d3c98",
     coords:[
-      [-5.5,35.9],[-5.0,36.5],[0.0,37.5],[3.0,37.0],
-      [5.0,37.5],[7.0,37.5],[9.0,38.0],[11.0,38.0],
-      [12.5,37.5],[13.5,37.5],[14.5,38.5],[15.5,38.0],
-      [16.0,38.5],[17.5,40.5],[18.5,40.5],[19.0,41.5],
-      [20.5,40.5],[21.5,37.5],[22.5,37.0],[23.5,37.5],
-      [24.5,35.5],[25.5,35.0],[26.0,36.0],[27.0,36.5],
-      [28.5,36.5],[29.5,36.5],[30.5,36.0],[31.5,36.5],
-      [32.5,36.5],[35.0,36.5],[36.5,36.5],[36.5,37.5],
-      [35.5,38.5],[34.5,38.5],[33.0,35.0],[32.5,34.5],
-      [32.0,34.0],[29.5,34.5],[28.0,34.5],[26.5,34.5],
-      [25.0,34.5],[23.0,34.5],[21.5,34.5],[20.0,34.0],
-      [18.0,34.0],[15.0,34.0],[12.0,34.0],[10.0,34.0],
-      [7.5,34.5],[5.0,35.5],[2.0,35.5],[-1.0,35.0],
-      [-2.5,35.0],[-5.0,35.8],[-5.5,35.9]
+      [-5.5,30.0],[42.0,30.0],[42.0,46.0],
+      [28.0,46.0],[20.0,46.0],[15.0,44.0],
+      [8.0,44.0],[3.0,43.5],[-2.0,37.5],
+      [-5.5,36.0],[-5.5,30.0]
     ]
   },
   {
-    // North American ECA — MARPOL Annex VI (200nm from US/Canada coast)
-    // Atlantic coast
     name:"N. America ECA — Atlantic (200nm)",
     color:"#1e8449",
     coords:[
-      [-42.0,47.0],[-42.0,44.0],[-56.0,42.0],[-66.0,40.0],
-      [-72.0,37.0],[-78.0,32.0],[-82.0,28.0],[-80.0,25.0],
-      [-78.0,24.0],[-70.0,23.0],[-65.0,23.5],[-60.0,24.5],
-      [-57.0,28.0],[-60.0,33.0],[-65.0,38.0],[-67.0,42.0],
-      [-58.0,46.0],[-52.0,47.5],[-47.0,48.0],[-42.0,47.0]
+      [-42.0,47.5],[-42.0,23.0],[-60.0,23.0],
+      [-75.0,23.0],[-82.5,25.0],[-82.5,30.0],
+      [-78.0,35.0],[-72.0,40.0],[-67.0,44.0],
+      [-52.0,47.5],[-42.0,47.5]
     ]
   },
   {
-    // North American ECA — Pacific coast
     name:"N. America ECA — Pacific (200nm)",
     color:"#1e8449",
     coords:[
-      [-122.5,49.0],[-122.0,47.5],[-124.5,45.0],[-126.0,40.0],
-      [-122.0,35.0],[-118.5,32.0],[-115.0,28.0],[-112.0,22.0],
-      [-105.0,20.0],[-100.0,20.0],[-110.0,24.0],[-120.0,30.0],
-      [-130.0,38.0],[-135.0,44.0],[-135.0,49.0],[-130.0,50.0],
-      [-128.0,50.5],[-124.0,49.5],[-122.5,49.0]
+      [-122.5,49.5],[-130.0,50.0],[-136.0,48.0],
+      [-136.0,38.0],[-122.0,33.0],[-117.0,30.0],
+      [-110.0,22.0],[-105.0,20.0],[-100.0,20.0],
+      [-100.0,22.0],[-110.0,24.0],[-120.0,32.0],
+      [-124.0,38.0],[-124.0,46.0],[-122.5,49.5]
     ]
   },
   {
-    // US Caribbean ECA — MARPOL Annex VI
-    name:"US Caribbean ECA",
+    name:"US Caribbean ECA (MARPOL)",
     color:"#148f77",
     coords:[
-      [-67.5,24.5],[-64.0,24.5],[-60.0,22.0],[-59.0,19.0],
-      [-60.0,17.0],[-63.0,15.5],[-67.0,15.0],[-72.0,17.0],
-      [-75.0,20.0],[-75.0,23.0],[-72.0,24.5],[-67.5,24.5]
+      [-98.0,10.0],[-60.0,10.0],[-60.0,26.0],
+      [-76.0,26.0],[-82.0,24.0],[-87.0,22.0],
+      [-90.0,18.0],[-98.0,18.0],[-98.0,10.0]
     ]
   },
   {
-    // Hawaii ECA — MARPOL Annex VI (50nm from Hawaii)
     name:"Hawaii ECA (50nm)",
     color:"#117a65",
     coords:[
-      [-161.5,22.5],[-159.0,22.5],[-156.5,21.5],[-154.5,19.5],
-      [-154.0,18.5],[-156.0,18.0],[-158.5,20.0],[-161.5,21.0],[-161.5,22.5]
+      [-162.0,22.5],[-154.0,22.5],[-154.0,18.5],
+      [-162.0,18.5],[-162.0,22.5]
     ]
   },
 ];
@@ -967,21 +942,35 @@ async function calcRoute(){
   btn.classList.add('loading');btn.textContent='⬡ ROUTING…';
 
   try {
-    // Build waypoint sequence: origin → [via anchor in → via point → via anchor out] → destination
-    // Each via point gets open-water approach anchors to prevent U-turns and island-crossing
-    const viaList=[...activeVia];
-    const legPoints=[{la:oLa,lo:oLo,name:oName}];
+    // For "force via" points: instead of adding intermediate legs (which distorts distance),
+    // we pass them as waypoints only if they genuinely require a detour.
+    // For canals/straits that searoute already uses by default, "force via" just
+    // ensures the avoid list does NOT exclude them — which is already the default.
+    // Only add intermediate waypoint legs for major geographic deviations
+    // (Cape of Good Hope, Cape Horn) that change the fundamental route.
+    const MAJOR_DETOURS = new Set(['cape_good_hope','cape_horn']);
+    const viaKeys = [...activeVia];
 
-    for(const key of viaList){
-      const v=VIA_COORDS[key];
-      const anchors=VIA_SEA_ANCHORS[key];
+    const legPoints = [{la:oLa,lo:oLo,name:oName}];
+
+    for(const key of viaKeys){
+      if(!MAJOR_DETOURS.has(key)) continue; // skip canals/straits — MARNET handles them
+      const v = VIA_COORDS[key];
       if(!v) continue;
-      // Add approach anchor (nearest to where we're coming from)
-      if(anchors && anchors.length>=1) legPoints.push({la:anchors[0].la,lo:anchors[0].lo,name:v.label+' approach'});
-      // The actual via waypoint
-      legPoints.push({la:v.la,lo:v.lo,name:v.label});
-      // Add departure anchor
-      if(anchors && anchors.length>=2) legPoints.push({la:anchors[1].la,lo:anchors[1].lo,name:v.label+' departure'});
+      // Use a single open-water anchor only (no departure anchor — avoids U-turns)
+      const anchors = VIA_SEA_ANCHORS[key];
+      if(anchors && anchors.length >= 1){
+        // Pick the anchor closer to origin
+        const distA0 = Math.abs(anchors[0].la - oLa) + Math.abs(anchors[0].lo - oLo);
+        const distA1 = anchors.length>1 ? Math.abs(anchors[1].la - oLa) + Math.abs(anchors[1].lo - oLo) : Infinity;
+        const entry = distA0 < distA1 ? anchors[0] : anchors[1];
+        const exit  = distA0 < distA1 ? (anchors[1]||anchors[0]) : anchors[0];
+        legPoints.push({la:entry.la,lo:entry.lo,name:v.label+' approach'});
+        legPoints.push({la:v.la,   lo:v.lo,    name:v.label});
+        legPoints.push({la:exit.la, lo:exit.lo, name:v.label+' departure'});
+      } else {
+        legPoints.push({la:v.la,lo:v.lo,name:v.label});
+      }
     }
 
     legPoints.push({la:dLa,lo:dLo,name:dName});
@@ -1070,6 +1059,7 @@ function renderRoute(){
 
   // Bottom bar
   document.getElementById('bNm').textContent=Math.round(d.distance_nm).toLocaleString()+' NM';
+  document.getElementById('bKm').textContent=Math.round(d.distance_km).toLocaleString()+' KM';
   document.getElementById('bFrom').textContent=d.oName.slice(0,20);
   document.getElementById('bTo').textContent=d.dName.slice(0,20);
   document.getElementById('bEca').textContent=Math.round(ecaNm).toLocaleString()+' NM';
