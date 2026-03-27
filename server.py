@@ -86,54 +86,100 @@ def route_searoute(olon,olat,dlon,dlat,restrictions):
     import searoute as sr
     sr_r=[PASSAGE_MAP[r] for r in restrictions if r in PASSAGE_MAP]
 
-    # Gulf of Aden corridor fix: if route likely passes through Gulf of Aden
-    # (between Red Sea and Indian Ocean), nudge via open-water point to avoid
-    # routing over the Socotra archipelago or Yemen coast.
-    # Detect: one end in Red Sea/Med/Europe, other end in Indian Ocean/Asia
-    in_west  = (olon < 50 and olat > 5) or (dlon < 50 and dlat > 5)
-    in_east  = (olon > 55) or (dlon > 55)
-    via_aden = in_west and in_east
-
-    if via_aden and 'babalmandab' not in sr_r:
-        # Route in two legs via open-water Gulf of Aden waypoint (12.5°N, 48°E)
-        # This is clear water, well south of Yemen and north of Socotra
-        mid_lon, mid_lat = 50.0, 11.8
-        try:
-            r1 = sr.searoute([olon,olat],[mid_lon,mid_lat],units="km",
-                             append_orig_dest=True,restrictions=sr_r,return_passages=True)
-            r2 = sr.searoute([mid_lon,mid_lat],[dlon,dlat],units="km",
-                             append_orig_dest=True,restrictions=sr_r,return_passages=True)
-            if r1 and r2:
-                c1 = r1.get("geometry",{}).get("coordinates",[])
-                c2 = r2.get("geometry",{}).get("coordinates",[])
-                coords = c1 + c2[1:]
-                p1 = r1.get("properties",{}); p2 = r2.get("properties",{})
-                total_km = (p1.get("length",0) or 0) + (p2.get("length",0) or 0)
-                pass1 = p1.get("passages",[]); pass2 = p2.get("passages",[])
-                if isinstance(pass1,str): pass1=[pass1] if pass1 else []
-                if isinstance(pass2,str): pass2=[pass2] if pass2 else []
-                passages = list(set(pass1+pass2))
-                return {"coordinates":coords,"distance_km":round(total_km,1),
-                        "distance_nm":round(total_km/1.852,1),
-                        "route_name":name_from_passages(passages),
-                        "passages":passages,"node_count":len(coords),"warning":None}
-        except:
-            pass  # fall through to normal routing
-
     try:
         route=sr.searoute([olon,olat],[dlon,dlat],units="km",
                           append_orig_dest=True,restrictions=sr_r,return_passages=True)
     except Exception as e:
         return {"error":str(e)}
     if not route: return {"error":"No route found"}
+
     geom=route.get("geometry",{}); coords=geom.get("coordinates",[])
     props=route.get("properties",{}); total_km=props.get("length",0)
     passages=props.get("passages",[])
     if isinstance(passages,str): passages=[passages] if passages else []
+
+    # ── POST-PROCESS: fix known land-crossing segments ──────────────────────
+    # Strategy: scan consecutive coordinate pairs for segments that pass through
+    # known land-crossing zones, and replace them with safe open-water waypoints.
+    # This does NOT add routing legs — it only adjusts display coordinates.
+    # The distance from searoute is kept as-is (it's calculated on the graph,
+    # not on the display polyline, so it's already correct).
+    coords = fix_land_crossings(coords)
+
     return {"coordinates":coords,"distance_km":round(total_km,1),
             "distance_nm":round(total_km/1.852,1),
             "route_name":name_from_passages(passages),
             "passages":passages,"node_count":len(coords),"warning":None}
+
+
+def segment_crosses_box(lon1,lat1,lon2,lat2, box_lon1,box_lat1,box_lon2,box_lat2):
+    """Check if a line segment passes through a bounding box."""
+    # Quick check: does the segment's bounding box overlap the hazard box?
+    seg_min_lon=min(lon1,lon2); seg_max_lon=max(lon1,lon2)
+    seg_min_lat=min(lat1,lat2); seg_max_lat=max(lat1,lat2)
+    if seg_max_lon<box_lon1 or seg_min_lon>box_lon2: return False
+    if seg_max_lat<box_lat1 or seg_min_lat>box_lat2: return False
+    return True
+
+
+def fix_land_crossings(coords):
+    """
+    Post-process coordinate list to fix known MARNET land-crossing artifacts.
+    Hazard zones and their safe replacement waypoint sequences.
+    Each hazard has: bounding box + list of open-water waypoints to insert
+    when a segment crosses that box.
+    """
+    # Known MARNET hazard zones: [lon_min, lat_min, lon_max, lat_max, [[safe waypoints]]]
+    HAZARDS = [
+        # Gulf of Aden / Socotra — route clips over island or Yemen coast
+        # Safe corridor: stay between 11.5°N–13°N threading south of Yemen peninsula
+        {
+            'box': [43.0, 11.0, 57.0, 14.5],
+            'safe': [
+                [43.5, 12.3],   # just past Bab-el-Mandeb, open water
+                [45.5, 12.0],   # Gulf of Aden centre
+                [48.0, 11.8],   # Gulf of Aden E, south of Yemen tip
+                [51.0, 11.5],   # clear of Socotra (south)
+                [54.0, 12.0],   # E. Gulf of Aden, open water
+            ]
+        },
+        # Red Sea northern exit — sometimes clips Sinai/Egypt
+        {
+            'box': [31.5, 27.5, 34.5, 30.5],
+            'safe': [
+                [32.5, 29.5],   # centre Red Sea N
+            ]
+        },
+    ]
+
+    if len(coords) < 2:
+        return coords
+
+    new_coords = [coords[0]]
+
+    for i in range(len(coords)-1):
+        lon1,lat1 = coords[i]
+        lon2,lat2 = coords[i+1]
+
+        inserted = False
+        for hz in HAZARDS:
+            b = hz['box']
+            if segment_crosses_box(lon1,lat1,lon2,lat2, b[0],b[1],b[2],b[3]):
+                # Check if either endpoint is already inside the safe zone
+                # (avoid inserting if segment is just traversing normally)
+                mid_lon = (lon1+lon2)/2
+                mid_lat = (lat1+lat2)/2
+                # Only insert waypoints if midpoint is IN the hazard box
+                if b[0] <= mid_lon <= b[2] and b[1] <= mid_lat <= b[3]:
+                    for wp in hz['safe']:
+                        new_coords.append(wp)
+                    inserted = True
+                    break
+
+        new_coords.append([lon2, lat2])
+
+    return new_coords
+
 
 @app.route("/api/status")
 def status():
