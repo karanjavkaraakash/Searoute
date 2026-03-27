@@ -135,12 +135,17 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
 .leaflet-container{background:#c9dff0!important}
 
 /* Bottom bar */
-.route-bar{position:absolute;bottom:0;left:0;right:0;background:rgba(13,17,23,.96);border-top:2px solid var(--accent);padding:8px 20px;display:none;gap:28px;align-items:center;z-index:600;backdrop-filter:blur(6px)}
+.route-bar{position:absolute;bottom:0;left:0;right:0;background:rgba(13,17,23,.96);border-top:2px solid var(--accent);padding:0;display:none;align-items:stretch;z-index:600;backdrop-filter:blur(6px);overflow:hidden}
 .route-bar.show{display:flex}
-.rb-item{display:flex;flex-direction:column;gap:2px;min-width:0}
+/* Total distance — highlighted anchor block on the left */
+.rb-nm-block{background:rgba(29,111,196,.2);border-right:1px solid var(--accent);padding:8px 20px;display:flex;flex-direction:column;gap:2px;flex-shrink:0;justify-content:center}
+.rb-divider{width:1px;background:var(--border2);flex-shrink:0;margin:6px 0}
+.rb-item{display:flex;flex-direction:column;gap:2px;padding:8px 16px;flex-shrink:0;justify-content:center}
 .rb-lbl{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;white-space:nowrap}
 .rb-val{font-family:var(--head);font-weight:800;font-size:16px;color:var(--text-bright);white-space:nowrap}
 .rb-val.ac{color:var(--accent-light)}.rb-val.go{color:var(--gold)}.rb-val.gr{color:var(--green)}.rb-val.ec{color:var(--eca)}
+.rb-nm-block .rb-lbl{color:var(--accent-light)}
+.rb-nm-block .rb-val{font-size:20px}
 /* Map overlay */
 .map-ov{position:absolute;top:14px;right:14px;background:rgba(13,17,23,.9);border:1px solid var(--border2);padding:9px 12px;z-index:600;backdrop-filter:blur(4px);display:none;border-radius:3px;min-width:180px}
 .ov-row{font-family:var(--mono);font-size:9px;color:var(--text-dim);display:flex;justify-content:space-between;gap:10px;margin-bottom:2px}
@@ -190,7 +195,10 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
   #map{height:calc(100vh - 46px);width:100%}
 
   /* Bottom bar wraps on mobile */
-  .route-bar{flex-wrap:wrap;gap:8px 16px;padding:8px 12px}
+  .route-bar{flex-wrap:wrap}
+  .rb-nm-block{padding:6px 12px;border-right:none;border-bottom:1px solid var(--accent);width:100%;flex-direction:row;align-items:baseline;gap:8px}
+  .rb-nm-block .rb-val{font-size:16px}
+  .rb-item{padding:5px 10px}
   .rb-val{font-size:13px}
   .rb-lbl{font-size:7px}
 
@@ -363,11 +371,14 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
   <div class="sb-sec" id="resSec" style="display:none">
     <div class="sec-lbl">📐 Route Metrics</div>
     <div class="res-grid">
-      <div class="res-card full" style="border-color:var(--accent)">
-        <div class="res-val ac" id="rNm" style="font-size:30px">—</div>
-        <div class="res-unit">TOTAL NAUTICAL MILES</div>
+      <div class="res-card full" style="border-color:var(--accent);background:rgba(29,111,196,.08)">
+        <div style="display:flex;align-items:baseline;gap:8px;justify-content:center;flex-wrap:wrap">
+          <div class="res-val ac" id="rNm" style="font-size:32px">—</div>
+          <div class="res-unit" style="font-size:11px;color:var(--accent-light)">NM</div>
+        </div>
+        <div class="res-unit" style="margin-top:2px">TOTAL DISTANCE</div>
       </div>
-      <div class="res-card"><div class="res-val ec" id="rEca">—</div><div class="res-unit">ECA MILES (NM)</div></div>
+      <div class="res-card"><div class="res-val ec" id="rEca">—</div><div class="res-unit">ECA MILES</div></div>
       <div class="res-card"><div class="res-val" id="rEcaPct" style="font-size:18px">—</div><div class="res-unit">ECA %</div></div>
       <div class="res-card full"><div class="res-val go" id="rRoute" style="font-size:15px">—</div><div class="res-unit">ROUTE TYPE</div></div>
       <div class="res-card full" id="rEcaBar" style="display:none;padding:8px 10px">
@@ -449,10 +460,11 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
     <div class="eca-row"><div class="eca-swatch" style="background:#117a65"></div>Hawaii ECA</div>
   </div>
   <div class="route-bar" id="rBar">
-    <div class="rb-item" style="background:rgba(45,141,224,.12);padding:4px 12px;border-radius:3px;border:1px solid var(--accent);min-width:120px">
-      <div class="rb-lbl" style="color:var(--accent-light)">TOTAL DISTANCE</div>
-      <div class="rb-val ac" id="bNm" style="font-size:18px">—</div>
+    <div class="rb-nm-block">
+      <div class="rb-lbl">TOTAL DISTANCE</div>
+      <div class="rb-val ac" id="bNm">—</div>
     </div>
+    <div class="rb-divider"></div>
     <div class="rb-item"><div class="rb-lbl">FROM</div><div class="rb-val" id="bFrom" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">TO</div><div class="rb-val" id="bTo" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">ECA MILES</div><div class="rb-val ec" id="bEca">—</div></div>
