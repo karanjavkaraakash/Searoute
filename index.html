@@ -402,9 +402,10 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
 </div><!-- /main -->
 
 <script>
-// API endpoint — works locally AND when deployed to Render/any cloud
-// window.location.origin automatically picks up the correct host in all cases
+// SeaRoute v3.0 — API auto-detection
+// API endpoint — works locally AND on Render/cloud deployments
 const API = window.location.origin;
+console.log('SeaRoute v3.0 — API:', API);
 
 // ══ PORT DATABASE (200+ major world ports) ════════════════════════════════════
 const PORTS = [
@@ -825,22 +826,39 @@ function calcECAMiles(coords){
 // ══ ENGINE STATUS ════════════════════════════════════════════════════════════
 async function checkEngine(){
   const p=document.getElementById('engPill');
-  try{
-    const r=await fetch(`${API}/api/status`,{signal:AbortSignal.timeout(4000)});
-    const d=await r.json();
-    if(d.status==='ready'){
-      p.textContent=`⬡ MARNET READY`;
-      p.className='pill ready';
-    } else {
-      p.textContent='⬡ LOADING…'; p.className='pill loading';
-      setTimeout(checkEngine,3000);
+  let attempts=0;
+  async function tryConnect(){
+    attempts++;
+    try{
+      // Render free tier can take 50+ seconds to cold-start — use long timeout
+      const r=await fetch(`${API}/api/status`,{signal:AbortSignal.timeout(60000)});
+      const d=await r.json();
+      if(d.status==='ready'){
+        p.textContent=`⬡ MARNET READY`;
+        p.className='pill ready';
+      } else {
+        p.textContent='⬡ ENGINE LOADING…';
+        p.className='pill loading';
+        setTimeout(tryConnect,3000);
+      }
+    } catch(e){
+      if(attempts<20){
+        // Keep retrying — server may be cold-starting (Render free tier)
+        p.textContent=`⬡ STARTING UP… (${attempts*5}s)`;
+        p.className='pill loading';
+        setTimeout(tryConnect,5000);
+      } else {
+        p.textContent='⬡ SERVER OFFLINE';
+        p.className='pill error';
+        // Still keep trying every 30s in case it comes back
+        setTimeout(tryConnect,30000);
+      }
     }
-  } catch(e){
-    p.textContent='⬡ SERVER OFFLINE'; p.className='pill error';
-    setTimeout(checkEngine,5000);
   }
+  tryConnect();
 }
 checkEngine();
+
 
 // ══ INPUT MODE ════════════════════════════════════════════════════════════════
 function setMode(m){
