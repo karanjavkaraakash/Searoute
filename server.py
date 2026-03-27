@@ -85,6 +85,41 @@ def route_scgraph(olon,olat,dlon,dlat,restrictions):
 def route_searoute(olon,olat,dlon,dlat,restrictions):
     import searoute as sr
     sr_r=[PASSAGE_MAP[r] for r in restrictions if r in PASSAGE_MAP]
+
+    # Gulf of Aden corridor fix: if route likely passes through Gulf of Aden
+    # (between Red Sea and Indian Ocean), nudge via open-water point to avoid
+    # routing over the Socotra archipelago or Yemen coast.
+    # Detect: one end in Red Sea/Med/Europe, other end in Indian Ocean/Asia
+    in_west  = (olon < 50 and olat > 5) or (dlon < 50 and dlat > 5)
+    in_east  = (olon > 55) or (dlon > 55)
+    via_aden = in_west and in_east
+
+    if via_aden and 'babalmandab' not in sr_r:
+        # Route in two legs via open-water Gulf of Aden waypoint (12.5°N, 48°E)
+        # This is clear water, well south of Yemen and north of Socotra
+        mid_lon, mid_lat = 50.0, 11.8
+        try:
+            r1 = sr.searoute([olon,olat],[mid_lon,mid_lat],units="km",
+                             append_orig_dest=True,restrictions=sr_r,return_passages=True)
+            r2 = sr.searoute([mid_lon,mid_lat],[dlon,dlat],units="km",
+                             append_orig_dest=True,restrictions=sr_r,return_passages=True)
+            if r1 and r2:
+                c1 = r1.get("geometry",{}).get("coordinates",[])
+                c2 = r2.get("geometry",{}).get("coordinates",[])
+                coords = c1 + c2[1:]
+                p1 = r1.get("properties",{}); p2 = r2.get("properties",{})
+                total_km = (p1.get("length",0) or 0) + (p2.get("length",0) or 0)
+                pass1 = p1.get("passages",[]); pass2 = p2.get("passages",[])
+                if isinstance(pass1,str): pass1=[pass1] if pass1 else []
+                if isinstance(pass2,str): pass2=[pass2] if pass2 else []
+                passages = list(set(pass1+pass2))
+                return {"coordinates":coords,"distance_km":round(total_km,1),
+                        "distance_nm":round(total_km/1.852,1),
+                        "route_name":name_from_passages(passages),
+                        "passages":passages,"node_count":len(coords),"warning":None}
+        except:
+            pass  # fall through to normal routing
+
     try:
         route=sr.searoute([olon,olat],[dlon,dlat],units="km",
                           append_orig_dest=True,restrictions=sr_r,return_passages=True)
