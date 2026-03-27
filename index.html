@@ -161,6 +161,63 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
 
 .hidden{display:none!important}
 .leaflet-tooltip.eca-tip{background:rgba(13,17,23,.88);border:1px solid #333;color:#ccc;font-size:10px;padding:3px 7px;border-radius:2px;box-shadow:none}
+
+/* ── MOBILE RESPONSIVE ── */
+.mob-toggle{display:none;position:fixed;bottom:20px;right:20px;z-index:2000;
+  width:48px;height:48px;border-radius:50%;background:var(--accent);
+  border:none;color:#fff;font-size:20px;cursor:pointer;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);align-items:center;justify-content:center}
+
+@media (max-width: 768px) {
+  header{height:46px;padding:0 12px}
+  .logo-text{font-size:16px;letter-spacing:2px}
+  .logo-sub{display:none}
+  .coord-hdr{display:none}
+  .pill{font-size:8px;padding:2px 7px}
+
+  .main{flex-direction:column;position:relative}
+
+  /* Sidebar slides in from left on mobile */
+  .sidebar{
+    position:fixed;top:46px;left:0;bottom:0;
+    width:280px;z-index:1500;
+    transform:translateX(-100%);
+    transition:transform .3s ease;
+    overflow-y:auto;
+  }
+  .sidebar.mob-open{transform:translateX(0)}
+
+  /* Map takes full screen */
+  #map{height:calc(100vh - 46px);width:100%}
+
+  /* Bottom bar wraps on mobile */
+  .route-bar{flex-wrap:wrap;gap:8px 16px;padding:8px 12px}
+  .rb-val{font-size:13px}
+  .rb-lbl{font-size:7px}
+
+  /* Map overlay smaller on mobile */
+  .map-ov{top:8px;right:8px;padding:7px 10px;min-width:140px}
+  .ov-row{font-size:8px}
+
+  /* ECA legend smaller */
+  .eca-legend{bottom:90px;right:8px;font-size:7px;padding:6px 8px}
+
+  /* Via grid 3 cols on mobile */
+  .via-grid{grid-template-columns:1fr 1fr 1fr}
+  .via-btn{font-size:7px;padding:4px 2px}
+
+  /* Hamburger visible */
+  .mob-toggle{display:flex}
+
+  /* Compass hidden on mobile */
+  .compass{display:none}
+}
+
+@media (max-width: 480px) {
+  .sidebar{width:100%;max-width:100%}
+  .route-bar{display:none!important} /* use map overlay instead on very small screens */
+  .map-ov{display:block!important;top:8px;right:8px}
+}
 </style>
 </head>
 <body>
@@ -180,6 +237,8 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
 </header>
 
 <div class="main">
+<!-- Mobile sidebar toggle button -->
+<button class="mob-toggle" id="mobToggle" onclick="toggleMobSidebar()" title="Toggle menu">☰</button>
 <!-- ════ SIDEBAR ════ -->
 <div class="sidebar">
 
@@ -306,16 +365,16 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
     <div class="sec-lbl">📐 Route Metrics</div>
     <div class="res-grid">
       <div class="res-card full" style="border-color:var(--accent)">
-        <div class="res-val ac" id="rNm" style="font-size:28px">—</div>
+        <div class="res-val ac" id="rNm" style="font-size:30px">—</div>
         <div class="res-unit">TOTAL NAUTICAL MILES</div>
       </div>
-      <div class="res-card"><div class="res-val" id="rKm">—</div><div class="res-unit">KILOMETRES</div></div>
       <div class="res-card"><div class="res-val ec" id="rEca">—</div><div class="res-unit">ECA MILES (NM)</div></div>
+      <div class="res-card"><div class="res-val" id="rEcaPct" style="font-size:18px">—</div><div class="res-unit">ECA %</div></div>
       <div class="res-card full"><div class="res-val go" id="rRoute" style="font-size:15px">—</div><div class="res-unit">ROUTE TYPE</div></div>
       <div class="res-card full" id="rEcaBar" style="display:none;padding:8px 10px">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">ECA PROPORTION</span>
-          <span style="font-family:var(--mono);font-size:9px;color:var(--eca)" id="rEcaPct">0%</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--eca)" id="rEcaPctBar">0%</span>
         </div>
         <div style="background:var(--border2);height:4px;border-radius:2px">
           <div id="rEcaBarFill" style="background:var(--eca);height:4px;border-radius:2px;width:0%;transition:width .6s ease"></div>
@@ -391,8 +450,7 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
     <div class="eca-row"><div class="eca-swatch" style="background:#117a65"></div>Hawaii ECA</div>
   </div>
   <div class="route-bar" id="rBar">
-    <div class="rb-item"><div class="rb-lbl">TOTAL DISTANCE (NM)</div><div class="rb-val ac" id="bNm">—</div></div>
-    <div class="rb-item"><div class="rb-lbl">KM</div><div class="rb-val" id="bKm" style="font-size:13px">—</div></div>
+    <div class="rb-item"><div class="rb-lbl">TOTAL DISTANCE</div><div class="rb-val ac" id="bNm">—</div></div>
     <div class="rb-item"><div class="rb-lbl">FROM</div><div class="rb-val" id="bFrom" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">TO</div><div class="rb-val" id="bTo" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">ECA MILES</div><div class="rb-val ec" id="bEca">—</div></div>
@@ -836,7 +894,22 @@ async function checkEngine(){
 checkEngine();
 
 
-// ══ INPUT MODE ════════════════════════════════════════════════════════════════
+// ══ MOBILE SIDEBAR TOGGLE ════════════════════════════════════════════════════
+function toggleMobSidebar(){
+  const sb=document.querySelector('.sidebar');
+  const btn=document.getElementById('mobToggle');
+  const open=sb.classList.toggle('mob-open');
+  btn.textContent=open?'✕':'☰';
+}
+// Close sidebar when user taps the map on mobile
+map.on('click',()=>{
+  const sb=document.querySelector('.sidebar');
+  if(sb.classList.contains('mob-open') && window.innerWidth<=768){
+    sb.classList.remove('mob-open');
+    document.getElementById('mobToggle').textContent='☰';
+  }
+});
+
 function setMode(m){
   inputMode=m;
   document.getElementById('portMode').classList.toggle('hidden',m!=='port');
@@ -1020,17 +1093,17 @@ function renderRoute(){
   const ecaNm=calcECAMiles(d.coordinates);
 
   // Results
-  document.getElementById('rNm').textContent=Math.round(d.distance_nm).toLocaleString();
-  document.getElementById('rKm').textContent=Math.round(d.distance_km).toLocaleString();
+  document.getElementById('rNm').textContent=Math.round(d.distance_nm).toLocaleString()+' NM';
   document.getElementById('rRoute').textContent=d.route_name||'—';
-  document.getElementById('rEca').textContent=Math.round(ecaNm).toLocaleString();
+  document.getElementById('rEca').textContent=ecaNm>0?Math.round(ecaNm).toLocaleString()+' NM':'0 NM';
 
-  // ECA progress bar
+  // ECA % card and progress bar
   const ecaPct=d.distance_nm>0?((ecaNm/d.distance_nm)*100):0;
+  document.getElementById('rEcaPct').textContent=ecaNm>0?ecaPct.toFixed(1)+'%':'0%';
   const ecaBar=document.getElementById('rEcaBar');
   if(ecaNm>0){
     ecaBar.style.display='block';
-    document.getElementById('rEcaPct').textContent=ecaPct.toFixed(1)+'%';
+    document.getElementById('rEcaPctBar').textContent=ecaPct.toFixed(1)+'%';
     document.getElementById('rEcaBarFill').style.width=Math.min(100,ecaPct).toFixed(1)+'%';
   } else {
     ecaBar.style.display='none';
@@ -1059,7 +1132,6 @@ function renderRoute(){
 
   // Bottom bar
   document.getElementById('bNm').textContent=Math.round(d.distance_nm).toLocaleString()+' NM';
-  document.getElementById('bKm').textContent=Math.round(d.distance_km).toLocaleString()+' KM';
   document.getElementById('bFrom').textContent=d.oName.slice(0,20);
   document.getElementById('bTo').textContent=d.dName.slice(0,20);
   document.getElementById('bEca').textContent=Math.round(ecaNm).toLocaleString()+' NM';
