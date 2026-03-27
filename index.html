@@ -365,7 +365,7 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
   <div class="sb-sec" id="resSec" style="display:none">
     <div class="sec-lbl">📐 Route Metrics</div>
     <div class="res-grid">
-      <div class="res-card"><div class="res-val ac" id="rNm">—</div><div class="res-unit">TOTAL DIST (NM)</div></div>
+      <div class="res-card"><div class="res-val ac" id="rNm" style="color:var(--accent-light);font-size:22px;display:block;visibility:visible">—</div><div class="res-unit">TOTAL DIST (NM)</div></div>
       <div class="res-card"><div class="res-val ec" id="rEca">—</div><div class="res-unit">ECA MILES (NM)</div></div>
       <div class="res-card full"><div class="res-val go" id="rRoute" style="font-size:15px">—</div><div class="res-unit">ROUTE TYPE</div></div>
       <div class="res-card full" id="rEcaBar" style="display:none;padding:8px 10px">
@@ -450,7 +450,7 @@ header{background:var(--panel);border-bottom:2px solid var(--border2);padding:0 
     <div class="rb-item"><div class="rb-lbl">FROM</div><div class="rb-val" id="bFrom" style="font-size:12px">—</div></div>
     <div class="rb-item"><div class="rb-lbl">TO</div><div class="rb-val" id="bTo" style="font-size:12px">—</div></div>
     <div class="rb-divider"></div>
-    <div class="rb-item"><div class="rb-lbl">TOTAL DIST (NM)</div><div class="rb-val ac" id="bNm">—</div></div>
+    <div class="rb-item"><div class="rb-lbl">TOTAL DIST (NM)</div><div class="rb-val ac" id="bNm" style="color:var(--accent-light)">—</div></div>
     <div class="rb-item"><div class="rb-lbl">ECA MILES</div><div class="rb-val ec" id="bEca">—</div></div>
     <div class="rb-item"><div class="rb-lbl">WAYPOINTS</div><div class="rb-val go" id="bWp">—</div></div>
     <div class="rb-item" id="bEtaItem" style="display:none"><div class="rb-lbl">ETA (UTC)</div><div class="rb-val gr" id="bEta">—</div></div>
@@ -1099,7 +1099,10 @@ function renderRoute(){
   const ecaNm=calcECAMiles(d.coordinates);
 
   // Results
-  document.getElementById('rNm').textContent=Math.round(d.distance_nm).toLocaleString()+' NM';
+  const nmVal = Math.round(d.distance_nm).toLocaleString()+' NM';
+  console.log('Setting rNm to:', nmVal, 'distance_nm=', d.distance_nm);
+  document.getElementById('rNm').textContent = nmVal;
+  document.getElementById('rNm').style.color = 'var(--accent-light)';
   document.getElementById('rRoute').textContent=d.route_name||'—';
   document.getElementById('rEca').textContent=ecaNm>0?Math.round(ecaNm).toLocaleString()+' NM':'0 NM';
 
@@ -1137,6 +1140,8 @@ function renderRoute(){
 
   // Bottom bar
   document.getElementById('bNm').textContent=Math.round(d.distance_nm).toLocaleString()+' NM';
+  document.getElementById('bNm').style.color='var(--accent-light)';
+  console.log('bNm set to:', document.getElementById('bNm').textContent);
   document.getElementById('bFrom').textContent=d.oName.slice(0,20);
   document.getElementById('bTo').textContent=d.dName.slice(0,20);
   document.getElementById('bEca').textContent=Math.round(ecaNm).toLocaleString()+' NM';
